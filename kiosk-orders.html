@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đơn từ Kiosk - FastPOS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .kiosk-header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 18px;
+      background: linear-gradient(135deg, #5b21b6, #3b0764);
+      color: #fff;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+    }
+    .kiosk-header .icon {
+      width: 46px; height: 46px; border-radius: 12px;
+      background: rgba(255,255,255,.15);
+      display: grid; place-items: center;
+      font-size: 22px;
+    }
+    .kiosk-header h2 { margin: 0; font-size: 17px; }
+    .kiosk-header .sub { font-size: 12.5px; opacity: .85; }
+    .kiosk-header .live {
+      margin-left: auto;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 999px;
+      background: rgba(255,255,255,.15);
+      font-size: 12px; font-weight: 500;
+    }
+    .kiosk-header .live .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 0 3px rgba(16,185,129,.3);
+      animation: pulse 1.5s infinite;
+    }
+
+    .order-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 14px;
+    }
+    .kiosk-order-card {
+      background: #fff;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      display: flex; flex-direction: column;
+      transition: all .2s;
+    }
+    .kiosk-order-card.new {
+      border-color: var(--brand);
+      animation: newOrderPulse 2s ease-out;
+    }
+    @keyframes newOrderPulse {
+      0% { box-shadow: 0 0 0 0 rgba(230,57,70,.6); }
+      100% { box-shadow: 0 0 0 15px rgba(230,57,70,0); }
+    }
+    .koc-head {
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .koc-head .n {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: #5b21b6; color: #fff;
+      display: grid; place-items: center;
+      font-weight: 700;
+    }
+    .koc-head .kid { font-weight: 700; font-family: monospace; font-size: 14px; }
+    .koc-head .time { font-size: 12px; color: #5b21b6; }
+    .koc-head .waited {
+      margin-left: auto;
+      padding: 4px 8px;
+      background: rgba(91,33,182,.15);
+      border-radius: 6px;
+      font-size: 11px; font-weight: 600;
+      color: #5b21b6;
+    }
+    .koc-body { padding: 12px 16px; flex: 1; }
+    .koc-item {
+      display: flex; justify-content: space-between;
+      padding: 4px 0;
+      font-size: 13px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .koc-item:last-child { border: none; }
+    .koc-item .qty { color: var(--brand); font-weight: 600; margin-right: 6px; }
+    .koc-foot {
+      padding: 12px 16px;
+      background: var(--surface-2);
+      border-top: 1px solid var(--border);
+    }
+    .koc-total {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .koc-total .label { font-size: 12px; color: var(--text-mute); text-transform: uppercase; }
+    .koc-total .value { font-size: 18px; color: var(--brand); font-family: monospace; }
+    .koc-meta {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .koc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .koc-actions .btn { padding: 9px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div id="shell"></div>
+
+    <main class="main">
+      <div class="kiosk-header">
+        <div class="icon"><i class="fa-solid fa-tablet-screen-button"></i></div>
+        <div>
+          <h2>Đơn hàng đến từ Kiosk</h2>
+          <div class="sub">Xác nhận thanh toán / chuyển bếp cho đơn khách tự đặt tại Kiosk</div>
+        </div>
+        <div class="live"><span class="dot"></span> WebSocket · KẾT NỐI</div>
+      </div>
+
+      <div class="grid grid-4 mb-16">
+        <div class="kpi info">
+          <div class="kpi-label">Kiosk online</div>
+          <div class="kpi-value">2/2</div>
+          <div class="kpi-hint">KIOSK-01, KIOSK-02</div>
+        </div>
+        <div class="kpi warning">
+          <div class="kpi-label">Đang chờ xử lý</div>
+          <div class="kpi-value" id="kpiPending">0</div>
+          <div class="kpi-hint">Đơn cần bạn xác nhận</div>
+        </div>
+        <div class="kpi success">
+          <div class="kpi-label">Đơn hôm nay</div>
+          <div class="kpi-value">12</div>
+          <div class="kpi-hint">Từ Kiosk (67%)</div>
+        </div>
+        <div class="kpi brand">
+          <div class="kpi-label">Doanh thu Kiosk</div>
+          <div class="kpi-value mono">2.34M</div>
+          <div class="kpi-hint">47% tổng ca</div>
+        </div>
+      </div>
+
+      <h3 style="margin: 4px 0 12px; font-size: 15px;">
+        <i class="fa-solid fa-hourglass-half text-brand"></i>
+        Đơn chờ xử lý
+        <span class="text-muted" style="font-weight: 400; font-size: 13px;">
+          — Nhấn "Xác nhận" để chuyển vào bếp, hoặc thu tiền nếu đơn chưa thanh toán
+        </span>
+      </h3>
+
+      <div class="order-cards" id="orderCards"></div>
+
+      <div class="empty" id="emptyState" style="display:none;">
+        <i class="fa-solid fa-inbox"></i>
+        <div>Hiện chưa có đơn từ Kiosk. Đơn mới sẽ tự động hiện khi có khách đặt.</div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    renderShell({ active: 'kiosk', title: 'Đơn từ Kiosk', icon: 'fa-tablet-screen-button' });
+
+    // Bản sao để có thể mutate
+    let queue = JSON.parse(JSON.stringify(KIOSK_QUEUE));
+    let newOrderIds = new Set(); // đánh dấu đơn mới để có animation
+
+    function renderQueue() {
+      const box = document.getElementById('orderCards');
+      const empty = document.getElementById('emptyState');
+      document.getElementById('kpiPending').textContent = queue.length;
+
+      if (queue.length === 0) {
+        box.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+
+      box.innerHTML = queue.map((o, idx) => {
+        const isNew = newOrderIds.has(o.id);
+        const paidBadge = o.paid
+          ? `<span class="badge badge-paid"><i class="fa-solid fa-check"></i> Đã thanh toán (${paymentLabel(o.payment)})</span>`
+          : `<span class="badge badge-unpaid"><i class="fa-solid fa-clock"></i> Thu tiền tại quầy</span>`;
+        const itemsHTML = o.items.map(i => `
+          <div class="koc-item">
+            <span><span class="qty">x${i.qty}</span>${i.name}</span>
+            <span class="mono">${money(i.price * i.qty)}</span>
+          </div>
+        `).join('');
+
+        return `
+          <div class="kiosk-order-card ${isNew ? 'new' : ''}">
+            <div class="koc-head">
+              <div class="n">${idx + 1}</div>
+              <div>
+                <div class="kid">${o.id}</div>
+                <div class="time"><i class="fa-solid fa-tablet-screen-button"></i> ${o.kioskId} · ${o.createdAt.split(' ')[1]}</div>
+              </div>
+              <div class="waited"><i class="fa-solid fa-stopwatch"></i> Chờ ${Math.floor(Math.random()*4)+1} phút</div>
+            </div>
+            <div class="koc-body">${itemsHTML}</div>
+            <div class="koc-foot">
+              <div class="koc-total">
+                <span class="label">Tổng cộng</span>
+                <span class="value">${money(o.total)}</span>
+              </div>
+              <div class="koc-meta">
+                ${paidBadge}
+                <span class="badge">${typeLabel(o.type)}</span>
+                <span class="badge">${o.customer}</span>
+              </div>
+              <div class="koc-actions">
+                ${o.paid
+                  ? `<button class="btn btn-success" onclick="acceptOrder('${o.id}')"><i class="fa-solid fa-check"></i> Chuyển bếp</button>`
+                  : `<button class="btn btn-primary" onclick="collectCash('${o.id}')"><i class="fa-solid fa-money-bill"></i> Thu tiền</button>`}
+                <button class="btn btn-ghost" onclick="rejectOrder('${o.id}')"><i class="fa-solid fa-xmark"></i> Từ chối</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      newOrderIds.clear();
+    }
+
+    function acceptOrder(id) {
+      queue = queue.filter(o => o.id !== id);
+      renderQueue();
+      toast('Đã chuyển đơn ' + id + ' vào bếp', 'success');
+    }
+    function collectCash(id) {
+      const o = queue.find(x => x.id === id);
+      if (!o) return;
+      if (confirm(`Xác nhận đã thu ${money(o.total)} từ khách cho đơn ${id}?`)) {
+        o.paid = true;
+        o.payment = 'cash';
+        renderQueue();
+        toast('Đã thu tiền + chuyển bếp: ' + id, 'success');
+        setTimeout(() => { queue = queue.filter(x => x.id !== id); renderQueue(); }, 800);
+      }
+    }
+    function rejectOrder(id) {
+      const reason = prompt('Lý do từ chối đơn ' + id + ':');
+      if (!reason) return;
+      queue = queue.filter(o => o.id !== id);
+      renderQueue();
+      toast('Đã từ chối đơn ' + id, 'warn');
+    }
+
+    // Giả lập đơn mới đến qua WebSocket
+    function simulateNewOrder() {
+      const orderId = `ORD-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`;
+      const pool = [
+        { items: [{ pid:'p06', name:'Gà Rán Truyền Thống', qty:1, price:39000 }, { pid:'p19', name:'Coca-Cola (M)', qty:1, price:22000 }], subtotal: 61000, total: 61000, payment:'vnpay', paid:true, customer:'Khách lẻ', kioskId:'KIOSK-01' },
+        { items: [{ pid:'p12', name:'Combo Burger Bò + Khoai + Coca', qty:1, price:99000 }], subtotal: 99000, total: 99000, payment:'pending', paid:false, customer:'Khách lẻ', kioskId:'KIOSK-02' },
+        { items: [{ pid:'p08', name:'Gà Popcorn', qty:2, price:49000 }, { pid:'p21', name:'Trà Đào Cam Sả', qty:2, price:35000 }], subtotal: 168000, total: 168000, payment:'vietqr', paid:true, customer:'Chị Hoa', kioskId:'KIOSK-01' }
+      ];
+      const t = pool[Math.floor(Math.random() * pool.length)];
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      const created = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      const newOrder = { id: orderId, source:'kiosk', type:'takeaway', discount:0, status:'pending', createdAt: created, ...t };
+      queue.unshift(newOrder);
+      newOrderIds.add(orderId);
+      renderQueue();
+      toast(`<i class="fa-solid fa-bell"></i> Đơn mới từ ${newOrder.kioskId}: ${orderId}`, 'info', 3500);
+
+      // Beep sound bằng Web Audio API
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AC();
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        g.gain.value = 0.08;
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start();
+        setTimeout(() => { osc.stop(); ctx.close(); }, 200);
+      } catch(e) {}
+    }
+
+    renderQueue();
+    // Mô phỏng: cứ 25s có đơn mới (trong hệ thống thật: WebSocket topic /topic/kiosk-orders)
+    setInterval(simulateNewOrder, 25000);
+  </script>
+</body>
+</html>

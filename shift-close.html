@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đóng ca & Báo cáo - FastPOS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .close-wrap { display: grid; grid-template-columns: 1fr 380px; gap: 18px; }
+    .cash-count-table { width: 100%; border-collapse: collapse; }
+    .cash-count-table th, .cash-count-table td {
+      padding: 8px 10px; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .cash-count-table th { background: var(--surface-2); font-weight: 600; }
+    .cash-count-table input {
+      width: 80px; padding: 5px 8px; border: 1px solid var(--border);
+      border-radius: 6px; text-align: right; font-family: monospace;
+    }
+    .diff-box {
+      margin-top: 14px; padding: 12px 16px;
+      border-radius: var(--radius);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .diff-box.match { background: #d1fae5; color: #065f46; }
+    .diff-box.miss { background: #fee2e2; color: #991b1b; }
+    .chart-wrap { position: relative; height: 260px; }
+
+    .method-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      background: var(--surface-2);
+      margin-bottom: 8px;
+    }
+    .method-item .left { display:flex; align-items:center; gap:12px; }
+    .method-item .ic {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: #fff; display: grid; place-items: center;
+      font-size: 18px;
+    }
+    .method-item .ic.cash { color: var(--success); }
+    .method-item .ic.vnpay { color: var(--info); }
+    .method-item .ic.vietqr { color: #5b21b6; }
+    .method-item .val { font-weight: 700; font-family: monospace; font-size: 16px; }
+    .method-item .pct { font-size: 11.5px; color: var(--text-mute); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div id="shell"></div>
+
+    <main class="main">
+      <div class="close-wrap">
+        <!-- LEFT: Tổng quan + biểu đồ -->
+        <div>
+          <div class="card mb-16">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-chart-pie text-brand"></i> Báo cáo ca làm việc</h3>
+              <div class="spacer"></div>
+              <span class="badge badge-preparing">Ca sáng · 07:30 - hiện tại</span>
+            </div>
+            <div class="card-body">
+              <div class="grid grid-4 mb-16">
+                <div class="kpi brand">
+                  <div class="kpi-label">Tổng đơn</div>
+                  <div class="kpi-value">18</div>
+                  <div class="kpi-hint">12 kiosk · 6 quầy</div>
+                </div>
+                <div class="kpi success">
+                  <div class="kpi-label">Doanh thu</div>
+                  <div class="kpi-value mono">4.98M</div>
+                  <div class="kpi-hint">4.980.000đ</div>
+                </div>
+                <div class="kpi info">
+                  <div class="kpi-label">TB / đơn</div>
+                  <div class="kpi-value mono">277K</div>
+                </div>
+                <div class="kpi warning">
+                  <div class="kpi-label">Đã hủy</div>
+                  <div class="kpi-value">1</div>
+                  <div class="kpi-hint">5.5% tổng đơn</div>
+                </div>
+              </div>
+
+              <h4 style="font-size:13px; margin: 8px 0 10px; text-transform:uppercase; color: var(--text-mute); letter-spacing: .4px;">Doanh thu theo phương thức</h4>
+              <div class="method-item">
+                <div class="left">
+                  <div class="ic cash"><i class="fa-solid fa-money-bill-wave"></i></div>
+                  <div>
+                    <div class="fw-600">Tiền mặt</div>
+                    <div class="pct">6 giao dịch · 33%</div>
+                  </div>
+                </div>
+                <div class="val text-success">1.240.000đ</div>
+              </div>
+              <div class="method-item">
+                <div class="left">
+                  <div class="ic vnpay"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                  <div>
+                    <div class="fw-600">VNPay</div>
+                    <div class="pct">7 giao dịch · 44%</div>
+                  </div>
+                </div>
+                <div class="val text-info" style="color: var(--info);">2.180.000đ</div>
+              </div>
+              <div class="method-item">
+                <div class="left">
+                  <div class="ic vietqr"><i class="fa-solid fa-qrcode"></i></div>
+                  <div>
+                    <div class="fw-600">VietQR</div>
+                    <div class="pct">5 giao dịch · 23%</div>
+                  </div>
+                </div>
+                <div class="val" style="color: #5b21b6;">1.560.000đ</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-2">
+            <div class="card">
+              <div class="card-header"><h3>Doanh thu theo giờ</h3></div>
+              <div class="card-body">
+                <div class="chart-wrap"><canvas id="hourlyChart"></canvas></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>Top 5 món bán chạy</h3></div>
+              <div class="card-body">
+                <div class="chart-wrap"><canvas id="topChart"></canvas></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Kiểm tiền + đóng ca -->
+        <div>
+          <div class="card mb-16">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-money-bill-wave text-success"></i> Kiểm tiền cuối ca</h3>
+            </div>
+            <div class="card-body">
+              <table class="cash-count-table">
+                <thead>
+                  <tr><th>Mệnh giá</th><th class="text-center">SL</th><th class="text-right">Tổng</th></tr>
+                </thead>
+                <tbody id="cashRows"></tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="2">Tổng đếm được</th>
+                    <th class="text-right mono" id="cashCounted">0đ</th>
+                  </tr>
+                </tfoot>
+              </table>
+
+              <div class="mt-12 text-sm">
+                <div class="d-flex justify-between"><span>Quỹ đầu ca</span><span class="mono">500.000đ</span></div>
+                <div class="d-flex justify-between"><span>Tiền mặt bán được</span><span class="mono">1.240.000đ</span></div>
+                <div class="d-flex justify-between fw-700"><span>Tiền mặt phải có</span><span class="mono" id="cashExpected">1.740.000đ</span></div>
+              </div>
+
+              <div class="diff-box match" id="diffBox">
+                <span><i class="fa-solid fa-scale-balanced"></i> Chênh lệch</span>
+                <span class="mono fw-700" id="diffValue">0đ</span>
+              </div>
+
+              <div class="form-group mt-16 mb-0">
+                <label class="form-label">Ghi chú bàn giao</label>
+                <textarea class="form-control" rows="3" placeholder="VD: Bàn giao ca chiều cho anh Hoan..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-lg btn-block mb-8" onclick="doCloseShift()">
+            <i class="fa-solid fa-flag-checkered"></i> Đóng ca & In báo cáo
+          </button>
+          <a href="pos.html" class="btn btn-ghost btn-block">
+            <i class="fa-solid fa-arrow-left"></i> Tiếp tục bán hàng
+          </a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    renderShell({ active: 'shift', title: 'Đóng ca & Báo cáo', icon: 'fa-flag-checkered' });
+
+    // Cash count rows
+    const denoms = [500000, 200000, 100000, 50000, 20000, 10000, 5000, 2000, 1000];
+    const cashRows = document.getElementById('cashRows');
+    cashRows.innerHTML = denoms.map(d => `
+      <tr>
+        <td class="mono">${d.toLocaleString('vi-VN')}đ</td>
+        <td class="text-center"><input type="number" min="0" value="0" data-denom="${d}" oninput="calcCash()"></td>
+        <td class="text-right mono" id="row${d}">0đ</td>
+      </tr>
+    `).join('');
+
+    function calcCash() {
+      let sum = 0;
+      document.querySelectorAll('.cash-count-table input').forEach(inp => {
+        const d = Number(inp.dataset.denom);
+        const q = Math.max(0, Number(inp.value) || 0);
+        const total = d * q;
+        sum += total;
+        document.getElementById('row' + d).textContent = money(total);
+      });
+      document.getElementById('cashCounted').textContent = money(sum);
+      const expected = 1740000;
+      const diff = sum - expected;
+      const box = document.getElementById('diffBox');
+      const val = document.getElementById('diffValue');
+      val.textContent = (diff > 0 ? '+' : '') + money(diff);
+      box.classList.toggle('match', diff === 0);
+      box.classList.toggle('miss', diff !== 0);
+    }
+
+    function doCloseShift() {
+      if (!confirm('Xác nhận đóng ca? Sau khi đóng, bạn sẽ được đưa về màn đăng nhập.')) return;
+      toast('Đã đóng ca thành công. Báo cáo đã in.', 'success');
+      setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+    }
+
+    // Chart: doanh thu theo giờ
+    new Chart(document.getElementById('hourlyChart'), {
+      type: 'bar',
+      data: {
+        labels: ['7h','8h','9h','10h','11h','12h','13h','14h'],
+        datasets: [{
+          label: 'Doanh thu (VNĐ)',
+          data: [120000, 340000, 620000, 890000, 1120000, 980000, 640000, 270000],
+          backgroundColor: '#e63946',
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { ticks: { callback: v => (v/1000)+'K' } } }
+      }
+    });
+
+    // Chart: top món
+    new Chart(document.getElementById('topChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Gà Rán Truyền Thống', 'Burger Bò Phô Mai', 'Combo Bữa Trưa', 'Coca-Cola', 'Khoai Tây Chiên'],
+        datasets: [{
+          data: [18, 14, 12, 22, 20],
+          backgroundColor: ['#e63946', '#f4a261', '#2a9d8f', '#4361ee', '#e9c46a']
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'right', labels: { font: { size: 11 } } } }
+      }
+    });
+
+    calcCash();
+  </script>
+</body>
+</html>

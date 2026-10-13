@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mở ca làm việc - FastPOS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body {
+      min-height: 100vh;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      padding: 20px;
+    }
+    .shift-wrap {
+      width: 100%; max-width: 520px;
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.15);
+      overflow: hidden;
+    }
+    .shift-head {
+      background: linear-gradient(135deg, #1f2937, #111827);
+      color: #fff;
+      padding: 26px 30px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .shift-head .icon {
+      width: 56px; height: 56px; border-radius: 14px;
+      background: var(--brand);
+      display: grid; place-items: center;
+      font-size: 26px;
+      box-shadow: 0 6px 18px rgba(230,57,70,.4);
+    }
+    .shift-head h2 { margin: 0; font-size: 20px; }
+    .shift-head .sub { font-size: 13px; color: #d1d5db; margin-top: 3px; }
+
+    .shift-body { padding: 26px 30px; }
+
+    .cashier-info {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      background: var(--surface-2);
+      padding: 14px;
+      border-radius: var(--radius);
+      margin-bottom: 18px;
+      font-size: 13px;
+    }
+    .cashier-info .lb { color: var(--text-mute); font-size: 11.5px; }
+    .cashier-info .vl { font-weight: 600; margin-top: 2px; }
+
+    .quick-cash-btn {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 8px; margin-top: 8px;
+    }
+    .quick-cash-btn button {
+      padding: 8px; border: 1px solid var(--border);
+      background: #fff; border-radius: 8px;
+      font-size: 12px; font-weight: 500;
+      cursor: pointer;
+    }
+    .quick-cash-btn button:hover { border-color: var(--brand); color: var(--brand); }
+  </style>
+</head>
+<body>
+  <div class="shift-wrap">
+    <div class="shift-head">
+      <div class="icon"><i class="fa-solid fa-cash-register"></i></div>
+      <div>
+        <h2>Mở ca làm việc</h2>
+        <div class="sub">Xác nhận tiền quỹ đầu ca trước khi bắt đầu bán hàng</div>
+      </div>
+    </div>
+
+    <div class="shift-body">
+      <div class="cashier-info">
+        <div>
+          <div class="lb">Thu ngân</div>
+          <div class="vl" id="staffName">Nguyễn Quốc Huy</div>
+        </div>
+        <div>
+          <div class="lb">Mã nhân viên</div>
+          <div class="vl">NV001</div>
+        </div>
+        <div>
+          <div class="lb">Ca làm việc</div>
+          <div class="vl">Ca sáng (07:30 - 15:30)</div>
+        </div>
+        <div>
+          <div class="lb">Ngày</div>
+          <div class="vl" id="today">--/--/----</div>
+        </div>
+      </div>
+
+      <form onsubmit="handleOpenShift(event)">
+        <div class="form-group">
+          <label class="form-label">Tiền mặt đầu ca (VNĐ) <span style="color:var(--danger)">*</span></label>
+          <div class="input-group">
+            <span class="input-group-prefix"><i class="fa-solid fa-money-bill-wave"></i></span>
+            <input type="text" class="form-control" id="openingCash" value="500,000" required>
+            <span class="input-group-suffix">đ</span>
+          </div>
+          <div class="quick-cash-btn">
+            <button type="button" onclick="setCash(200000)">200.000đ</button>
+            <button type="button" onclick="setCash(500000)">500.000đ</button>
+            <button type="button" onclick="setCash(1000000)">1.000.000đ</button>
+            <button type="button" onclick="setCash(2000000)">2.000.000đ</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Máy POS / Quầy</label>
+          <select class="form-control">
+            <option>Quầy 01 - Máy POS chính</option>
+            <option>Quầy 02 - Máy POS phụ</option>
+            <option>Quầy 03 - Drive-thru</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Ghi chú (tùy chọn)</label>
+          <textarea class="form-control" rows="2" placeholder="Ví dụ: nhận bàn giao từ ca đêm..."></textarea>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <a href="index.html" class="btn btn-ghost" style="flex: 0 0 auto;">
+            <i class="fa-solid fa-arrow-left"></i> Quay lại
+          </a>
+          <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">
+            <i class="fa-solid fa-play"></i>
+            Mở ca & Bắt đầu bán hàng
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Ngày hôm nay
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    document.getElementById('today').textContent = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
+
+    function setCash(v) {
+      document.getElementById('openingCash').value = v.toLocaleString('vi-VN');
+    }
+    // Format khi gõ
+    document.getElementById('openingCash').addEventListener('input', (e) => {
+      const raw = e.target.value.replace(/[^\d]/g, '');
+      e.target.value = raw ? Number(raw).toLocaleString('vi-VN') : '';
+    });
+
+    function handleOpenShift(e) {
+      e.preventDefault();
+      window.location.href = 'pos.html';
+    }
+  </script>
+</body>
+</html>

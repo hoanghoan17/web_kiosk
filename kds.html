@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trạng thái bếp - FastPOS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .kds-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px;
+    }
+    .kds-header h2 { margin: 0; font-size: 18px; }
+    .kds-header .sub { color: var(--text-mute); font-size: 13px; }
+
+    .kds-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+    }
+    .kds-card {
+      background: #fff;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .kds-card .head {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .kds-card .head .id { font-weight: 700; font-family: monospace; }
+    .kds-card .head .time {
+      margin-left: auto;
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--surface-2);
+      color: var(--text-mute);
+    }
+    .kds-card.late .head .time { background: #fee2e2; color: #991b1b; }
+    .kds-card.ready { border-color: var(--success); }
+    .kds-card.ready .head { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
+    .kds-card .items { padding: 8px 14px 12px; }
+    .kds-card .items .it {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0;
+      font-size: 13.5px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .kds-card .items .it:last-child { border: none; }
+    .kds-card .items .it.done {
+      color: var(--text-mute);
+      text-decoration: line-through;
+    }
+    .kds-card .items .it i {
+      width: 18px; height: 18px; border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 10px;
+    }
+    .kds-card .items .it.done i { background: var(--success); color: #fff; }
+    .kds-card .items .it:not(.done) i { border: 2px solid #d1d5db; }
+    .kds-card .foot {
+      padding: 10px 14px;
+      background: var(--surface-2);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div id="shell"></div>
+
+    <main class="main">
+      <div class="kds-header">
+        <i class="fa-solid fa-utensils text-brand" style="font-size:22px;"></i>
+        <div>
+          <h2>Trạng thái bếp (KDS)</h2>
+          <div class="sub">Theo dõi tiến độ chế biến để thông báo khách khi món sẵn sàng</div>
+        </div>
+        <div style="margin-left:auto;" class="shift-indicator">
+          <span class="dot"></span> Đồng bộ realtime
+        </div>
+      </div>
+
+      <div class="grid grid-4 mb-16">
+        <div class="kpi info">
+          <div class="kpi-label">Đang chuẩn bị</div>
+          <div class="kpi-value" id="kpiPreparing">0</div>
+        </div>
+        <div class="kpi success">
+          <div class="kpi-label">Sẵn sàng giao</div>
+          <div class="kpi-value" id="kpiReady">0</div>
+        </div>
+        <div class="kpi warning">
+          <div class="kpi-label">Thời gian TB</div>
+          <div class="kpi-value">4:32</div>
+          <div class="kpi-hint">phút / đơn</div>
+        </div>
+        <div class="kpi brand">
+          <div class="kpi-label">Đơn quá 10 phút</div>
+          <div class="kpi-value" id="kpiLate">0</div>
+          <div class="kpi-hint">cần theo dõi</div>
+        </div>
+      </div>
+
+      <h3 style="margin: 4px 0 12px; font-size: 15px;">
+        <i class="fa-solid fa-fire text-brand"></i> Đơn trong bếp
+      </h3>
+      <div class="kds-grid" id="kdsGrid"></div>
+    </main>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    renderShell({ active: 'kds', title: 'Trạng thái bếp', icon: 'fa-utensils' });
+
+    function renderKDS() {
+      const grid = document.getElementById('kdsGrid');
+      const preparing = KDS_ORDERS.filter(o => o.status === 'preparing').length;
+      const ready = KDS_ORDERS.filter(o => o.status === 'ready').length;
+      const late = KDS_ORDERS.filter(o => o.elapsedMin >= 10).length;
+
+      document.getElementById('kpiPreparing').textContent = preparing;
+      document.getElementById('kpiReady').textContent = ready;
+      document.getElementById('kpiLate').textContent = late;
+
+      grid.innerHTML = KDS_ORDERS.map(o => {
+        const isLate = o.elapsedMin >= 10;
+        const isReady = o.status === 'ready';
+        const itemsHTML = o.items.map((it, i) => `
+          <div class="it ${it.done ? 'done' : ''}" onclick="toggleItem('${o.id}', ${i})" style="cursor:pointer;">
+            <i class="fa-solid ${it.done ? 'fa-check' : ''}"></i>
+            <span>${it.name}</span>
+          </div>
+        `).join('');
+        return `
+          <div class="kds-card ${isReady ? 'ready' : ''} ${isLate ? 'late' : ''}">
+            <div class="head">
+              <span class="badge badge-${o.source}">${sourceLabel(o.source)}</span>
+              <span class="id">${o.id.split('-').slice(-1)[0]}</span>
+              <span class="time"><i class="fa-solid fa-clock"></i> ${o.elapsedMin} phút</span>
+            </div>
+            <div class="items">${itemsHTML}</div>
+            <div class="foot">
+              <span class="badge badge-${o.status}">${statusLabel(o.status)}</span>
+              ${isReady
+                ? `<button class="btn btn-success btn-sm" onclick="markDelivered('${o.id}')"><i class="fa-solid fa-hand-holding"></i> Đã giao khách</button>`
+                : `<button class="btn btn-ghost btn-sm" onclick="markReady('${o.id}')"><i class="fa-solid fa-bell"></i> Báo sẵn sàng</button>`}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleItem(orderId, itemIdx) {
+      const o = KDS_ORDERS.find(x => x.id === orderId);
+      if (o) o.items[itemIdx].done = !o.items[itemIdx].done;
+      // Auto set ready khi hoàn tất tất cả
+      if (o && o.items.every(i => i.done)) o.status = 'ready';
+      renderKDS();
+    }
+    function markReady(id) {
+      const o = KDS_ORDERS.find(x => x.id === id);
+      if (o) { o.status = 'ready'; o.items.forEach(i => i.done = true); }
+      renderKDS();
+      toast('Đã báo khách đơn ' + id + ' sẵn sàng', 'success');
+    }
+    function markDelivered(id) {
+      const idx = KDS_ORDERS.findIndex(x => x.id === id);
+      if (idx >= 0) KDS_ORDERS.splice(idx, 1);
+      renderKDS();
+      toast('Đã giao đơn ' + id + ' cho khách', 'success');
+    }
+
+    // Auto tăng elapsed mỗi phút (mô phỏng)
+    setInterval(() => {
+      KDS_ORDERS.forEach(o => { if (o.status !== 'ready') o.elapsedMin += 1; });
+      renderKDS();
+    }, 60000);
+
+    renderKDS();
+  </script>
+</body>
+</html>

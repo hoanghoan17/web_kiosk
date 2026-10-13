@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đơn hàng trong ca - FastPOS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .filters-bar {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+      background: #fff;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin-bottom: 14px;
+    }
+    .filters-bar .search-wrap { flex: 1; min-width: 220px; position: relative; }
+    .filters-bar .search-wrap i {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-mute);
+    }
+    .filters-bar .search-wrap input {
+      width: 100%; padding: 8px 12px 8px 36px;
+      border: 1px solid var(--border); border-radius: 8px;
+      font-size: 13.5px;
+    }
+    .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .fc-chip {
+      padding: 6px 12px; border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      font-size: 12px; cursor: pointer;
+    }
+    .fc-chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+    .order-row-items { font-size: 12px; color: var(--text-mute); }
+    .actions-cell { white-space: nowrap; }
+    .actions-cell .btn { padding: 5px 9px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div id="shell"></div>
+
+    <main class="main">
+      <!-- KPI hàng đầu -->
+      <div class="grid grid-4 mb-16">
+        <div class="kpi brand">
+          <div class="kpi-label">Tổng đơn hôm nay</div>
+          <div class="kpi-value" id="kpiTotal">18</div>
+          <div class="kpi-hint"><i class="fa-solid fa-arrow-up text-success"></i> +6 so với hôm qua</div>
+        </div>
+        <div class="kpi success">
+          <div class="kpi-label">Đã hoàn tất</div>
+          <div class="kpi-value" id="kpiDone">14</div>
+          <div class="kpi-hint">78% tỉ lệ hoàn thành</div>
+        </div>
+        <div class="kpi info">
+          <div class="kpi-label">Đang xử lý</div>
+          <div class="kpi-value" id="kpiPending">3</div>
+          <div class="kpi-hint">Bếp đang chuẩn bị</div>
+        </div>
+        <div class="kpi warning">
+          <div class="kpi-label">Doanh thu ca</div>
+          <div class="kpi-value mono">4.98M</div>
+          <div class="kpi-hint">Tiền mặt · VNPay · VietQR</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters-bar">
+        <div class="search-wrap">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input id="orderSearch" placeholder="Tìm theo mã đơn, tên khách..." oninput="renderOrders()">
+        </div>
+        <div class="filter-chips" id="statusFilter">
+          <button class="fc-chip active" data-st="all" onclick="setFilter('all')">Tất cả</button>
+          <button class="fc-chip" data-st="pending" onclick="setFilter('pending')">Chờ xử lý</button>
+          <button class="fc-chip" data-st="preparing" onclick="setFilter('preparing')">Đang chuẩn bị</button>
+          <button class="fc-chip" data-st="ready" onclick="setFilter('ready')">Sẵn sàng</button>
+          <button class="fc-chip" data-st="delivered" onclick="setFilter('delivered')">Đã giao</button>
+          <button class="fc-chip" data-st="cancelled" onclick="setFilter('cancelled')">Đã hủy</button>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="toast('Xuất CSV thành công','success')">
+            <i class="fa-solid fa-file-export"></i> Xuất CSV
+          </button>
+          <a href="pos.html" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-plus"></i> Đơn mới
+          </a>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Mã đơn</th>
+              <th>Thời gian</th>
+              <th>Khách hàng</th>
+              <th>Nguồn</th>
+              <th>Loại</th>
+              <th>Món</th>
+              <th class="text-right">Tổng</th>
+              <th>Thanh toán</th>
+              <th>Trạng thái</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="ordersTbody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal chi tiết đơn -->
+  <div class="modal-backdrop" id="orderDetailModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 id="odTitle">Chi tiết đơn hàng</h3>
+        <button class="close" onclick="closeModal('orderDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" id="odBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('orderDetailModal')">Đóng</button>
+        <button class="btn btn-info" onclick="reprintCurrent()"><i class="fa-solid fa-print"></i> In lại hóa đơn</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    renderShell({ active: 'orders', title: 'Đơn hàng trong ca', icon: 'fa-receipt' });
+
+    let CURRENT_FILTER = 'all';
+    let CURRENT_ORDER = null;
+
+    function setFilter(st) {
+      CURRENT_FILTER = st;
+      document.querySelectorAll('.fc-chip').forEach(c => c.classList.toggle('active', c.dataset.st === st));
+      renderOrders();
+    }
+
+    function renderOrders() {
+      const q = document.getElementById('orderSearch').value.toLowerCase();
+      const rows = SAMPLE_ORDERS.filter(o => {
+        const okStatus = CURRENT_FILTER === 'all' || o.status === CURRENT_FILTER;
+        const okSearch = !q || o.id.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q);
+        return okStatus && okSearch;
+      });
+
+      const tb = document.getElementById('ordersTbody');
+      if (rows.length === 0) {
+        tb.innerHTML = `<tr><td colspan="10"><div class="empty">
+          <i class="fa-solid fa-inbox"></i>
+          <div>Không có đơn hàng phù hợp bộ lọc</div>
+        </div></td></tr>`;
+        return;
+      }
+      tb.innerHTML = rows.map(o => {
+        const itemsText = o.items.slice(0, 2).map(i => `${i.name}${i.qty>1?' x'+i.qty:''}`).join(', ')
+          + (o.items.length > 2 ? `, +${o.items.length - 2} món` : '');
+        return `
+          <tr>
+            <td class="fw-600 mono">${o.id}</td>
+            <td class="text-muted">${o.createdAt.split(' ')[1] || o.createdAt}</td>
+            <td>${o.customer}</td>
+            <td><span class="badge badge-${o.source}">${sourceLabel(o.source)}</span></td>
+            <td>${typeLabel(o.type)}</td>
+            <td><div class="order-row-items" title="${o.items.map(i=>i.name+' x'+i.qty).join('\n')}">${itemsText}</div></td>
+            <td class="text-right price">${money(o.total)}</td>
+            <td><span class="badge ${o.paid?'badge-paid':'badge-unpaid'}">${paymentLabel(o.payment)}</span></td>
+            <td><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></td>
+            <td class="actions-cell">
+              <button class="btn btn-ghost" onclick="viewOrder('${o.id}')" title="Xem"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn btn-ghost" onclick="reprint('${o.id}')" title="In lại"><i class="fa-solid fa-print"></i></button>
+              ${o.status !== 'cancelled' && o.status !== 'delivered'
+                ? `<button class="btn btn-ghost" onclick="cancelOrder('${o.id}')" title="Hủy đơn"><i class="fa-solid fa-ban" style="color:var(--danger)"></i></button>`
+                : ''}
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    function viewOrder(id) {
+      const o = SAMPLE_ORDERS.find(x => x.id === id);
+      if (!o) return;
+      CURRENT_ORDER = o;
+      document.getElementById('odTitle').innerHTML = `Chi tiết đơn <span class="mono text-brand">${o.id}</span>`;
+      const itemsHTML = o.items.map(i => `
+        <tr>
+          <td>${i.name}</td>
+          <td class="text-center">${i.qty}</td>
+          <td class="text-right mono">${money(i.price)}</td>
+          <td class="text-right mono fw-600">${money(i.price * i.qty)}</td>
+        </tr>`).join('');
+      document.getElementById('odBody').innerHTML = `
+        <div class="grid grid-2 mb-16">
+          <div>
+            <div class="text-muted text-sm">Khách hàng</div>
+            <div class="fw-600">${o.customer}</div>
+          </div>
+          <div>
+            <div class="text-muted text-sm">Thời gian tạo</div>
+            <div class="fw-600">${o.createdAt}</div>
+          </div>
+          <div>
+            <div class="text-muted text-sm">Nguồn đơn</div>
+            <div><span class="badge badge-${o.source}">${sourceLabel(o.source)}</span> · ${typeLabel(o.type)}</div>
+          </div>
+          <div>
+            <div class="text-muted text-sm">Thu ngân</div>
+            <div class="fw-600">${o.cashier}</div>
+          </div>
+        </div>
+        <table class="table" style="border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+          <thead><tr><th>Món</th><th class="text-center">SL</th><th class="text-right">Đơn giá</th><th class="text-right">Thành tiền</th></tr></thead>
+          <tbody>${itemsHTML}</tbody>
+        </table>
+        <div style="margin-top:14px; padding:12px; background:var(--surface-2); border-radius:8px;">
+          <div class="d-flex justify-between"><span>Tạm tính</span><span class="mono">${money(o.subtotal)}</span></div>
+          ${o.discount > 0 ? `<div class="d-flex justify-between text-success"><span>Giảm giá ${o.voucher?'('+o.voucher+')':''}</span><span class="mono">-${money(o.discount)}</span></div>` : ''}
+          <div class="d-flex justify-between fw-700 text-brand" style="font-size:16px; margin-top:6px; padding-top:6px; border-top:1px solid var(--border);">
+            <span>TỔNG CỘNG</span><span class="mono">${money(o.total)}</span>
+          </div>
+          <div class="d-flex justify-between text-sm text-muted mt-8">
+            <span>Phương thức</span><span>${paymentLabel(o.payment)} · <span class="badge badge-${o.status}">${statusLabel(o.status)}</span></span>
+          </div>
+          ${o.cancelReason ? `<div class="text-danger text-sm mt-8"><i class="fa-solid fa-circle-exclamation"></i> Lý do hủy: ${o.cancelReason}</div>` : ''}
+        </div>
+      `;
+      openModal('orderDetailModal');
+    }
+    function reprint(id) { toast('Đã gửi lệnh in lại đơn ' + id, 'info'); }
+    function reprintCurrent() { if (CURRENT_ORDER) reprint(CURRENT_ORDER.id); }
+    function cancelOrder(id) {
+      const reason = prompt('Nhập lý do hủy đơn ' + id + ':');
+      if (!reason) return;
+      const o = SAMPLE_ORDERS.find(x => x.id === id);
+      if (o) { o.status = 'cancelled'; o.cancelReason = reason; }
+      renderOrders();
+      toast('Đã hủy đơn ' + id, 'warn');
+    }
+
+    renderOrders();
+  </script>
+</body>
+</html>

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bán hàng (POS) - FastPOS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pos.css">
+  <style>
+    /* Chip options trong product modal */
+    .opt-group-title { font-size: 12.5px; font-weight: 600; color:#374151; margin: 12px 0 8px; text-transform: uppercase; letter-spacing: .3px; }
+    .opt-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .opt-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .opt-chip:hover { border-color: var(--brand); }
+    .opt-chip input { display: none; }
+    .opt-chip em { font-style: normal; color: var(--brand); font-weight: 600; font-size: 12px; }
+    .opt-chip:has(input:checked) {
+      background: var(--brand-light);
+      border-color: var(--brand);
+      color: var(--brand);
+    }
+    .pm-thumb {
+      width: 100%; height: 160px;
+      background: linear-gradient(135deg, #fef3c7, #fde68a);
+      border-radius: var(--radius);
+      display: grid; place-items: center;
+      font-size: 72px; color: #b45309;
+      margin-bottom: 14px;
+    }
+    .pm-qty-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+      margin-top: 14px;
+    }
+    .pm-qty-row .qty-big {
+      display: inline-flex; align-items: center; gap: 12px;
+    }
+    .pm-qty-row .qty-big button {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--surface-2); border: 1px solid var(--border);
+      font-size: 14px; color: var(--brand); font-weight: 600;
+    }
+    .pm-qty-row .qty-big span { font-weight: 700; font-size: 18px; min-width: 30px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div id="shell"></div>
+
+    <main class="main">
+      <div class="pos-layout">
+        <!-- ============ MENU ============ -->
+        <div class="pos-menu">
+          <div class="pos-menu-header">
+            <div class="pos-search">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" placeholder="Tìm món theo tên hoặc mã (VD: BG01)..." oninput="onSearchInput(this.value)">
+            </div>
+            <button class="btn btn-ghost" onclick="toast('Sẽ mở máy quét mã vạch (BE gửi qua WebSocket)', 'info')">
+              <i class="fa-solid fa-barcode"></i> Quét
+            </button>
+          </div>
+
+          <div class="category-tabs" id="categoryTabs"></div>
+
+          <div class="product-grid" id="productGrid"></div>
+        </div>
+
+        <!-- ============ CART ============ -->
+        <div class="cart-panel">
+          <div class="cart-header">
+            <div class="cart-order-info">
+              <div>
+                <div class="order-code">Mã đơn tạm</div>
+                <div class="order-num" id="orderNumber">--</div>
+              </div>
+              <div style="text-align:right;">
+                <div class="order-code">Số món</div>
+                <div class="order-num"><span id="cartCount">0</span></div>
+              </div>
+            </div>
+            <div class="order-type-switch">
+              <button data-type="dine-in" onclick="setOrderType('dine-in')">
+                <i class="fa-solid fa-utensils"></i> Tại quầy
+              </button>
+              <button class="active" data-type="takeaway" onclick="setOrderType('takeaway')">
+                <i class="fa-solid fa-bag-shopping"></i> Mang đi
+              </button>
+            </div>
+          </div>
+
+          <div class="cart-items" id="cartItems"></div>
+
+          <!-- Gợi ý FP-Growth -->
+          <div class="suggestions" id="suggestionsBox" style="display:none;"></div>
+
+          <!-- Voucher -->
+          <div class="discount-input">
+            <input type="text" id="voucherInput" placeholder="Nhập mã giảm giá (HUIT10, LUNCH20...)">
+            <button class="btn btn-outline btn-sm" onclick="applyVoucher()">
+              <i class="fa-solid fa-tag"></i> Áp dụng
+            </button>
+          </div>
+
+          <div class="cart-totals">
+            <div class="row"><span>Tạm tính</span><span class="mono" id="subtotal">0đ</span></div>
+            <div class="row"><span>Giảm giá</span><span class="mono text-success" id="discount">-0đ</span></div>
+            <div class="row total"><span>TỔNG CỘNG</span><span class="mono" id="total">0đ</span></div>
+          </div>
+
+          <div class="cart-actions">
+            <button class="btn btn-ghost" onclick="clearCart()" title="Xóa giỏ">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+            <button class="btn btn-primary btn-lg" id="btnPay" onclick="openPayment()">
+              <i class="fa-solid fa-credit-card"></i> Thanh toán
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============ MODAL CHI TIẾT MÓN ============ -->
+  <div class="modal-backdrop" id="productModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 id="pmName">Tên món</h3>
+        <button class="close" onclick="closeModal('productModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="grid" style="grid-template-columns: 220px 1fr; gap: 22px;">
+          <div>
+            <div class="pm-thumb"><i id="pmIcon" class="fa-solid fa-utensils"></i></div>
+            <div class="text-muted text-sm" id="pmDesc"></div>
+            <div class="mt-8 text-sm">
+              <i class="fa-solid fa-boxes-stacked text-muted"></i>
+              Còn <strong id="pmStock">--</strong> phần
+            </div>
+            <div class="mt-8">
+              <span class="text-muted text-sm">Giá gốc:</span>
+              <span class="fw-700 text-brand" id="pmBasePrice">0đ</span>
+            </div>
+          </div>
+          <div>
+            <div class="opt-group-title">Kích cỡ</div>
+            <div class="opt-chip-list" id="pmSizeList"></div>
+
+            <div class="opt-group-title">Topping thêm</div>
+            <div class="opt-chip-list" id="pmToppingList"></div>
+
+            <div class="opt-group-title">Ghi chú</div>
+            <textarea class="form-control" id="pmNote" rows="2" placeholder="VD: ít cay, không hành, đóng gói riêng..."></textarea>
+          </div>
+        </div>
+
+        <div class="pm-qty-row">
+          <div class="qty-big">
+            <span class="text-muted text-sm">Số lượng</span>
+            <button onclick="pmQtyChange(-1)"><i class="fa-solid fa-minus"></i></button>
+            <span id="pmQty">1</span>
+            <button onclick="pmQtyChange(1)"><i class="fa-solid fa-plus"></i></button>
+          </div>
+          <div>
+            <div class="text-muted text-sm text-right">Thành tiền</div>
+            <div class="text-2xl fw-700 text-brand mono" id="pmTotalPrice">0đ</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('productModal')">Hủy</button>
+        <button class="btn btn-primary" onclick="confirmAddProduct()">
+          <i class="fa-solid fa-cart-plus"></i> Thêm vào giỏ
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL THANH TOÁN ============ -->
+  <div class="modal-backdrop" id="paymentModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-credit-card text-brand"></i> Thanh toán đơn hàng</h3>
+        <button class="close" onclick="closeModal('paymentModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="payTotalHidden">
+        <div style="background: var(--surface-2); padding: 14px 18px; border-radius: var(--radius); margin-bottom: 18px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="text-muted text-sm">TỔNG THANH TOÁN</div>
+            <div class="text-2xl fw-700 text-brand mono" id="payTotal">0đ</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="text-muted text-sm">Đã bao gồm VAT</div>
+            <div class="text-sm">Cảm ơn quý khách!</div>
+          </div>
+        </div>
+
+        <div class="grid grid-2" style="margin-bottom: 16px;">
+          <div class="form-group mb-0">
+            <label class="form-label">Tên khách hàng</label>
+            <input class="form-control" id="payCustomerName" placeholder="Khách lẻ">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">SĐT (tùy chọn)</label>
+            <input class="form-control" id="payCustomerPhone" placeholder="09xx xxx xxx">
+          </div>
+        </div>
+
+        <label class="form-label">Phương thức thanh toán</label>
+        <div class="pay-methods">
+          <div class="pay-method active" data-method="cash" onclick="selectPayMethod('cash')">
+            <i class="fa-solid fa-money-bill-wave"></i>
+            <div class="m-name">Tiền mặt</div>
+          </div>
+          <div class="pay-method" data-method="vnpay" onclick="selectPayMethod('vnpay')">
+            <i class="fa-solid fa-mobile-screen-button"></i>
+            <div class="m-name">VNPay</div>
+          </div>
+          <div class="pay-method" data-method="vietqr" onclick="selectPayMethod('vietqr')">
+            <i class="fa-solid fa-qrcode"></i>
+            <div class="m-name">VietQR</div>
+          </div>
+        </div>
+
+        <!-- Cash panel -->
+        <div class="pay-panel cash-panel" data-method="cash">
+          <label class="form-label">Tiền khách đưa</label>
+          <div class="input-group">
+            <span class="input-group-prefix"><i class="fa-solid fa-hand-holding-dollar"></i></span>
+            <input class="form-control mono" id="payCashInput" placeholder="0">
+            <span class="input-group-suffix">đ</span>
+          </div>
+          <div class="quick-cash">
+            <button type="button" onclick="payQuickCash(50000)">50.000đ</button>
+            <button type="button" onclick="payQuickCash(100000)">100.000đ</button>
+            <button type="button" onclick="payQuickCash(200000)">200.000đ</button>
+            <button type="button" onclick="payQuickCash(500000)">500.000đ</button>
+          </div>
+          <div class="change-display">
+            <div class="label">TIỀN THỐI LẠI</div>
+            <div class="value" id="payChange">0đ</div>
+          </div>
+        </div>
+
+        <!-- QR panel (VNPay / VietQR) -->
+        <div class="pay-panel qr-panel" data-method="vnpay" style="display:none;">
+          <div class="qr-code-box">
+            <img id="qrImage" src="" alt="QR code">
+          </div>
+          <div class="qr-info">
+            Quét mã bằng ứng dụng <strong id="qrMethod">VNPay</strong> hoặc ngân hàng<br>
+            Số tiền: <strong id="qrAmount" class="text-brand mono">0đ</strong>
+          </div>
+          <div class="text-muted text-sm mt-8">
+            <i class="fa-solid fa-circle-info"></i>
+            Trạng thái thanh toán sẽ cập nhật tự động qua WebSocket khi khách hoàn tất
+          </div>
+        </div>
+        <div class="pay-panel qr-panel" data-method="vietqr" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('paymentModal')">Hủy</button>
+        <button class="btn btn-success btn-lg" onclick="confirmPayment()">
+          <i class="fa-solid fa-check"></i> Xác nhận thanh toán
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/pos.js"></script>
+  <script>
+    renderShell({ active: 'pos', title: 'Bán hàng (POS)', icon: 'fa-cash-register' });
+    initPOS();
+  </script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hóa đơn - FastPOS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/invoice.css">
+</head>
+<body>
+  <div class="app">
+    <div id="shell"></div>
+
+    <main class="main">
+      <div id="printArea" class="invoice-page">
+        <!-- Receipt preview -->
+        <div class="receipt-wrap">
+          <div class="receipt" id="receipt">
+            <!-- filled by JS -->
+          </div>
+        </div>
+
+        <!-- Actions sidebar -->
+        <div class="invoice-actions no-print">
+          <div class="card mb-16">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-circle-check text-success"></i> Đã thanh toán</h3>
+            </div>
+            <div class="card-body">
+              <div class="info-row"><span class="l">Mã đơn</span><span class="v mono" id="iaOrderId">--</span></div>
+              <div class="info-row"><span class="l">Khách hàng</span><span class="v" id="iaCustomer">--</span></div>
+              <div class="info-row"><span class="l">Loại đơn</span><span class="v" id="iaType">--</span></div>
+              <div class="info-row"><span class="l">Phương thức</span><span class="v" id="iaMethod">--</span></div>
+              <div class="info-row"><span class="l">Tổng tiền</span><span class="v mono text-brand" id="iaTotal">--</span></div>
+              <div class="info-row" id="iaChangeRow"><span class="l">Tiền thối</span><span class="v mono" id="iaChange">--</span></div>
+            </div>
+          </div>
+
+          <div class="d-flex" style="flex-direction:column; gap: 10px;">
+            <button class="btn btn-primary btn-lg btn-block" onclick="window.print()">
+              <i class="fa-solid fa-print"></i> In hóa đơn
+            </button>
+            <button class="btn btn-info btn-block" onclick="sendEmail()">
+              <i class="fa-solid fa-envelope"></i> Gửi qua Email
+            </button>
+            <button class="btn btn-warning btn-block" onclick="sendSMS()">
+              <i class="fa-solid fa-sms"></i> Gửi hóa đơn qua SMS
+            </button>
+            <a href="pos.html" class="btn btn-success btn-lg btn-block">
+              <i class="fa-solid fa-plus"></i> Tạo đơn hàng mới
+            </a>
+            <a href="orders.html" class="btn btn-ghost btn-block">
+              <i class="fa-solid fa-list"></i> Danh sách đơn trong ca
+            </a>
+          </div>
+
+          <div class="card mt-16" style="background: #fef3c7; border-color: #fde68a;">
+            <div class="card-body" style="font-size:12.5px; color:#78350f;">
+              <i class="fa-solid fa-lightbulb"></i>
+              <strong>Mẹo:</strong> Nhấn <kbd>Ctrl</kbd>+<kbd>P</kbd> để in hoặc <kbd>Ctrl</kbd>+<kbd>N</kbd> để tạo đơn mới.
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    renderShell({ active: 'pos', title: 'Hóa đơn bán hàng', icon: 'fa-receipt' });
+
+    // Đọc đơn vừa tạo từ localStorage
+    let order;
+    try { order = JSON.parse(localStorage.getItem('lastOrder')); } catch(e) {}
+
+    // Nếu không có (mở trực tiếp), tạo đơn demo
+    if (!order) {
+      order = {
+        id: 'ORD-20260920-DEMO',
+        items: [
+          { name: 'Burger Bò Phô Mai', qty: 1, unitPrice: 65000, size: 'M', toppings: [{name:'Thêm phô mai',extra:8000}], note: '' },
+          { name: 'Khoai Tây Chiên (M)', qty: 1, unitPrice: 29000, size: 'M', toppings: [], note: '' },
+          { name: 'Coca-Cola (M)',       qty: 2, unitPrice: 22000, size: 'M', toppings: [], note: '' }
+        ],
+        subtotal: 146000, discount: 0, total: 146000,
+        voucher: null, payment: 'cash',
+        cashReceived: 200000, change: 54000,
+        type: 'takeaway', customer: 'Khách lẻ', customerPhone: '',
+        cashier: 'Nguyễn Quốc Huy', cashierCode: 'NV001',
+        createdAt: new Date().toLocaleString('vi-VN')
+      };
+    }
+
+    // Render receipt
+    const itemsHTML = order.items.map(it => {
+      const opts = [];
+      if (it.size && it.size !== 'M') opts.push(`Size ${it.size}`);
+      if (it.toppings && it.toppings.length) opts.push(it.toppings.map(t => t.name).join(', '));
+      if (it.note) opts.push('* ' + it.note);
+      return `
+        <div class="r-item">
+          <div class="l1">
+            <span>${it.name}</span>
+            <span>${money(it.qty * it.unitPrice)}</span>
+          </div>
+          <div class="l2">${it.qty} x ${money(it.unitPrice)}${opts.length ? ' · ' + opts.join(' · ') : ''}</div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('receipt').innerHTML = `
+      <div class="center">
+        <div class="r-brand-icon"><i class="fa-solid fa-burger"></i></div>
+        <div class="r-title">FASTPOS FAST FOOD</div>
+        <div>140 Lê Trọng Tấn, Q. Tân Phú, TP.HCM</div>
+        <div>ĐT: 028 3812 3456 · MST: 0312345678</div>
+      </div>
+      <hr>
+      <div class="center" style="font-weight:700; letter-spacing:2px;">HÓA ĐƠN BÁN HÀNG</div>
+      <div class="center" style="font-size:11px;">(Lưu ý: đây là chứng từ tạm)</div>
+      <hr>
+      <div class="r-meta">
+        <div><span>Số HĐ:</span><span>${order.id}</span></div>
+        <div><span>Ngày:</span><span>${order.createdAt}</span></div>
+        <div><span>Thu ngân:</span><span>${order.cashier} (${order.cashierCode})</span></div>
+        <div><span>Loại:</span><span>${typeLabel(order.type)}</span></div>
+        <div><span>Khách:</span><span>${order.customer}${order.customerPhone ? ' - ' + order.customerPhone : ''}</span></div>
+      </div>
+      <hr>
+      <div class="r-items">${itemsHTML}</div>
+      <hr>
+      <div class="r-totals">
+        <div><span>Tạm tính</span><span>${money(order.subtotal)}</span></div>
+        ${order.discount > 0 ? `<div><span>Giảm giá${order.voucher ? ' (' + order.voucher + ')' : ''}</span><span>-${money(order.discount)}</span></div>` : ''}
+        <div class="grand"><span>TỔNG CỘNG</span><span>${money(order.total)}</span></div>
+        <div><span>Thanh toán</span><span>${paymentLabel(order.payment)}</span></div>
+        ${order.payment === 'cash' ? `
+          <div><span>Tiền khách đưa</span><span>${money(order.cashReceived)}</span></div>
+          <div><span>Tiền thối</span><span>${money(order.change)}</span></div>
+        ` : ''}
+      </div>
+      <hr>
+      <div class="r-footer">
+        <div>Cảm ơn quý khách!</div>
+        <div>Hẹn gặp lại quý khách lần sau ♥</div>
+        <div class="barcode"></div>
+        <div style="font-family:monospace; letter-spacing:2px;">${order.id.replace(/[^\d]/g,'').slice(-12)}</div>
+      </div>
+    `;
+
+    // Sidebar info
+    document.getElementById('iaOrderId').textContent = order.id;
+    document.getElementById('iaCustomer').textContent = order.customer;
+    document.getElementById('iaType').textContent = typeLabel(order.type);
+    document.getElementById('iaMethod').textContent = paymentLabel(order.payment);
+    document.getElementById('iaTotal').textContent = money(order.total);
+    if (order.payment === 'cash') {
+      document.getElementById('iaChange').textContent = money(order.change);
+    } else {
+      document.getElementById('iaChangeRow').style.display = 'none';
+    }
+
+    function sendEmail() {
+      toast('Đã gửi hóa đơn PDF vào email khách hàng', 'success');
+    }
+    function sendSMS() {
+      if (!order.customerPhone) {
+        toast('Đơn không có SĐT khách hàng', 'warn');
+        return;
+      }
+      toast('Đã gửi tin nhắn xác nhận đơn hàng', 'success');
+    }
+
+    // Ctrl+N tạo đơn mới, Ctrl+P in
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'n') { e.preventDefault(); window.location.href = 'pos.html'; }
+    });
+  </script>
+</body>
+</html>
